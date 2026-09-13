@@ -2,7 +2,7 @@ import numpy as np
 
 
 class World:
-    def __init__(self, width=800, height=600):
+    def __init__(self, width=10.0, height=10.0):
         self.width = width
         self.height = height
 
@@ -18,9 +18,8 @@ class World:
         self.target = self._random_position()
 
     def _random_position(self):
-        margin = 50
-
-        x = np.random.uniform(margin, self.width - margin)
-        y = np.random.uniform(margin, self.height - margin)
-
-        return np.array([x, y], dtype=np.float32)
+        return np.random.uniform(
+            low=0.5,
+            high=9.5,
+            size=2
+        ).astype(np.float32)
