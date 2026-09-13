@@ -34,12 +34,11 @@ class RLWorld:
 
     def get_state(self):
 
-        return np.array([
-            self.agent[0] / 10.0,
-            self.agent[1] / 10.0,
-            self.target[0] / 10.0,
-            self.target[1] / 10.0,
-        ], dtype=np.float32)
+        relative_position = self.target - self.agent
+
+        return (
+            relative_position / 10.0
+        ).astype(np.float32)
 
     def distance(self):
 

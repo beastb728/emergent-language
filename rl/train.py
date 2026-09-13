@@ -6,7 +6,7 @@ from environment.rl_world import RLWorld
 from rl.dqn import DQNAgent
 
 
-EPISODES = 1000
+EPISODES = 2000
 TARGET_UPDATE = 25
 
 world = RLWorld()
