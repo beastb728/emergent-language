@@ -18,6 +18,10 @@ class Agent:
 
         self.position += direction * step_size
 
-        # Keep agent inside the world
-        self.position[0] = np.clip(self.position[0], 0.0, 10.0)
-        self.position[1] = np.clip(self.position[1], 0.0, 10.0)
+        self.position[0] = np.clip(
+            self.position[0], 0.0, 10.0
+        )
+
+        self.position[1] = np.clip(
+            self.position[1], 0.0, 10.0
+        )
