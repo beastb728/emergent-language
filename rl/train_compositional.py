@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 from torch.distributions import Categorical
 
 from environment.compositional_world import CompositionalWorld
@@ -12,19 +11,13 @@ NUM_EPISODES = 5000
 
 world = CompositionalWorld()
 
-sender_x = SenderNetwork(
+sender = SenderNetwork(
     state_size=6,
-    message_size=4
+    message_size=16
 )
 
-sender_y = SenderNetwork(
-    state_size=6,
-    message_size=4
-)
-
-optimizer = torch.optim.Adam(
-    list(sender_x.parameters()) +
-    list(sender_y.parameters()),
+sender_optimizer = torch.optim.Adam(
+    sender.parameters(),
     lr=1e-3
 )
 
@@ -41,51 +34,37 @@ for episode in range(NUM_EPISODES):
 
     world.reset()
 
-    # --------------------------------
-    # Sender
-    # --------------------------------
-
     sender_state = torch.tensor(
         world.sender_state(),
         dtype=torch.float32
     ).unsqueeze(0)
 
-    logits_x = sender_x(sender_state)
-    logits_y = sender_y(sender_state)
+    # One categorical distribution over 16 messages.
+    logits = sender(sender_state)
 
-    distribution_x = Categorical(
-        logits=logits_x
+    distribution = Categorical(
+        logits=logits
     )
 
-    distribution_y = Categorical(
-        logits=logits_y
+    message_id = distribution.sample()
+
+    log_probability = distribution.log_prob(
+        message_id
     )
 
-    message_x = distribution_x.sample()
-    message_y = distribution_y.sample()
+    message_id = message_id.item()
 
-    log_prob_x = distribution_x.log_prob(
-        message_x
-    )
-
-    log_prob_y = distribution_y.log_prob(
-        message_y
-    )
-
-    message_x = message_x.item()
-    message_y = message_y.item()
-
-    # --------------------------------
-    # Receiver state
-    # --------------------------------
+    # Decode 16-way message into two 4-valued symbols.
+    message_1 = message_id // 4
+    message_2 = message_id % 4
 
     message_one_hot = torch.zeros(
         8,
         dtype=torch.float32
     )
 
-    message_one_hot[message_x] = 1.0
-    message_one_hot[4 + message_y] = 1.0
+    message_one_hot[message_1] = 1.0
+    message_one_hot[4 + message_2] = 1.0
 
     state = torch.tensor(
         world.agent_b / 10.0,
@@ -102,29 +81,21 @@ for episode in range(NUM_EPISODES):
     episode_reward = 0.0
     done = False
 
-    # --------------------------------
-    # Navigation
-    # --------------------------------
-
     while not done:
 
         action = receiver.choose_action(state)
 
-        reward, done, reached = world.step(
-            action
-        )
+        reward, done, reached = world.step(action)
 
-        next_message_one_hot = message_one_hot
-
-        next_state = torch.tensor(
+        next_position = torch.tensor(
             world.agent_b / 10.0,
             dtype=torch.float32
         )
 
         next_state = torch.cat(
             [
-                next_state,
-                next_message_one_hot
+                next_position,
+                message_one_hot
             ]
         ).numpy()
 
@@ -139,24 +110,14 @@ for episode in range(NUM_EPISODES):
         receiver.train_step()
 
         state = next_state
-
         episode_reward += reward
 
-    # --------------------------------
-    # Sender REINFORCE update
-    # --------------------------------
+    # Sender REINFORCE update.
+    loss = -log_probability * episode_reward
 
-    sender_loss = -(
-        log_prob_x + log_prob_y
-    ) * episode_reward
-
-    optimizer.zero_grad()
-    sender_loss.backward()
-    optimizer.step()
-
-    # --------------------------------
-    # Receiver updates
-    # --------------------------------
+    sender_optimizer.zero_grad()
+    loss.backward()
+    sender_optimizer.step()
 
     receiver.decay_epsilon()
 
@@ -166,15 +127,9 @@ for episode in range(NUM_EPISODES):
     if reached:
         success_count += 1
 
-    # --------------------------------
-    # Progress
-    # --------------------------------
-
     if episode % 100 == 0:
 
-        success_rate = (
-            success_count / 100
-        )
+        success_rate = success_count / 100
 
         print(
             f"Episode {episode} | "
@@ -185,29 +140,18 @@ for episode in range(NUM_EPISODES):
         success_count = 0
 
 
-# --------------------------------
-# Save models
-# --------------------------------
-
 torch.save(
-    sender_x.state_dict(),
-    "models/sender_x_compositional.pt"
-)
-
-torch.save(
-    sender_y.state_dict(),
-    "models/sender_y_compositional.pt"
+    sender.state_dict(),
+    "models/sender_compositional_v2.pt"
 )
 
 torch.save(
     receiver.policy_net.state_dict(),
-    "models/receiver_compositional.pt"
+    "models/receiver_compositional_v2.pt"
 )
-
 
 print()
 print("Training complete.")
 print("Saved:")
-print("models/sender_x_compositional.pt")
-print("models/sender_y_compositional.pt")
-print("models/receiver_compositional.pt")
+print("models/sender_compositional_v2.pt")
+print("models/receiver_compositional_v2.pt")
